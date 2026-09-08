@@ -9,14 +9,52 @@ const env = require('./config/env');
 
 const app = express();
 
+// Setup CORS allowed origins
+const allowedOrigins = (env.CLIENT_URL || '')
+  .split(',')
+  .map((origin) => origin.trim().replace(/\/$/, ''))
+  .filter(Boolean);
+
 // Security Middlewares
-app.use(helmet());
-app.use(cors({
-  origin: env.CLIENT_URL,
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' }
+  })
+);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, Postman, server-to-server)
+      if (!origin) return callback(null, true);
+
+      const normalizedOrigin = origin.replace(/\/$/, '');
+
+      // Allow if origin is in configured allowedOrigins or wildcard is set
+      if (allowedOrigins.includes(normalizedOrigin) || allowedOrigins.includes('*')) {
+        return callback(null, true);
+      }
+
+      // Automatically allow Vercel previews & production deployments
+      if (/^https:\/\/.*\.vercel\.app$/.test(normalizedOrigin)) {
+        return callback(null, true);
+      }
+
+      // Automatically allow localhost for local development
+      if (
+        /^http:\/\/localhost(:\d+)?$/.test(normalizedOrigin) ||
+        /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(normalizedOrigin)
+      ) {
+        return callback(null, true);
+      }
+
+      return callback(null, false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  })
+);
 
 // Rate Limiting
 const limiter = rateLimit({
