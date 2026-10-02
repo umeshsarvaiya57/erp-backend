@@ -5,6 +5,9 @@ const authenticateUser = require('../middlewares/authMiddleware');
 const requireTenant = require('../middlewares/tenantMiddleware');
 const requirePermission = require('../middlewares/permissionMiddleware');
 
+// Public Route: Customers can view and download invoice without login
+router.get('/public/:id', salesController.getPublicSaleById);
+
 router.use(authenticateUser);
 router.use(requireTenant);
 

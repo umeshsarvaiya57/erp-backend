@@ -1,10 +1,15 @@
+const mongoose = require('mongoose');
 const Sale = require('../models/Sale');
 const Purchase = require('../models/Purchase');
 
 const getFinancialReport = async (businessId) => {
+  const bId = mongoose.Types.ObjectId.isValid(businessId)
+    ? new mongoose.Types.ObjectId(businessId)
+    : businessId;
+
   // Aggregate sales tax values
   const salesTaxData = await Sale.aggregate([
-    { $match: { businessId, status: 'COMPLETED' } },
+    { $match: { businessId: bId, status: { $ne: 'CANCELLED' } } },
     {
       $group: {
         _id: null,
@@ -19,7 +24,7 @@ const getFinancialReport = async (businessId) => {
 
   // Aggregate purchase tax values
   const purchaseTaxData = await Purchase.aggregate([
-    { $match: { businessId, status: 'COMPLETED' } },
+    { $match: { businessId: bId, status: { $ne: 'CANCELLED' } } },
     {
       $group: {
         _id: null,

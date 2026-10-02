@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Sale = require('../models/Sale');
 const Purchase = require('../models/Purchase');
 const Product = require('../models/Product');
@@ -6,80 +7,205 @@ const Supplier = require('../models/Supplier');
 const Activity = require('../models/Activity');
 
 const getDashboardStats = async (businessId) => {
-  // Calculate sales summary
+  if (!businessId) {
+    return {
+      metrics: {
+        totalSales: 0,
+        totalPaidSales: 0,
+        totalDueSales: 0,
+        totalInvoices: 0,
+        todaySales: 0,
+        todayInvoices: 0,
+        totalPurchases: 0,
+        totalPurchaseOrders: 0,
+        customerOutstandings: 0,
+        totalCustomers: 0,
+        supplierOutstandings: 0,
+        totalSuppliers: 0,
+        lowStockCount: 0,
+        totalProducts: 0
+      },
+      chartData: [],
+      topProducts: [],
+      lowStockProducts: [],
+      recentActivities: [],
+      recentSales: []
+    };
+  }
+
+  // Ensure businessId is properly cast to ObjectId for Mongo aggregations
+  const bId = mongoose.Types.ObjectId.isValid(businessId)
+    ? new mongoose.Types.ObjectId(businessId)
+    : businessId;
+
+  // 1. Calculate overall sales summary
   const salesData = await Sale.aggregate([
-    { $match: { businessId, status: 'COMPLETED' } },
+    { $match: { businessId: bId, status: { $ne: 'CANCELLED' } } },
     { 
       $group: { 
         _id: null, 
         total: { $sum: '$grandTotal' }, 
         paid: { $sum: '$paidAmount' }, 
-        due: { $sum: '$dueAmount' } 
+        due: { $sum: '$dueAmount' },
+        count: { $sum: 1 }
+      } 
+    }
+  ]);
+
+  // 2. Calculate today's sales summary
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const todaySalesData = await Sale.aggregate([
+    { 
+      $match: { 
+        businessId: bId, 
+        status: { $ne: 'CANCELLED' }, 
+        createdAt: { $gte: todayStart, $lte: todayEnd } 
+      } 
+    },
+    { 
+      $group: { 
+        _id: null, 
+        total: { $sum: '$grandTotal' },
+        count: { $sum: 1 }
       } 
     }
   ]);
   
-  // Calculate purchase expenditures
+  // 3. Calculate purchase expenditures
   const purchaseData = await Purchase.aggregate([
-    { $match: { businessId, status: 'COMPLETED' } },
-    { $group: { _id: null, total: { $sum: '$grandTotal' } } }
+    { $match: { businessId: bId, status: { $ne: 'CANCELLED' } } },
+    { 
+      $group: { 
+        _id: null, 
+        total: { $sum: '$grandTotal' },
+        count: { $sum: 1 }
+      } 
+    }
   ]);
 
-  // Outstanding customer receivables
+  // 4. Outstanding customer receivables & total customers
   const customerData = await Customer.aggregate([
-    { $match: { businessId } },
-    { $group: { _id: null, due: { $sum: '$balance' } } }
+    { $match: { businessId: bId } },
+    { 
+      $group: { 
+        _id: null, 
+        due: { $sum: '$balance' },
+        count: { $sum: 1 }
+      } 
+    }
   ]);
 
-  // Outstanding supplier payables
+  // 5. Outstanding supplier payables & total suppliers
   const supplierData = await Supplier.aggregate([
-    { $match: { businessId } },
-    { $group: { _id: null, due: { $sum: '$balance' } } }
+    { $match: { businessId: bId } },
+    { 
+      $group: { 
+        _id: null, 
+        due: { $sum: '$balance' },
+        count: { $sum: 1 }
+      } 
+    }
   ]);
 
-  // Low stock products count
+  // 6. Low stock products count and low stock items list
   const lowStockCount = await Product.countDocuments({
-    businessId,
+    businessId: bId,
     isActive: true,
-    $expr: { $lte: ['$quantity', '$minimumStock'] }
+    $or: [
+      { $expr: { $lte: ['$quantity', '$minimumStock'] } },
+      { quantity: { $lte: 0 } }
+    ]
   });
 
-  const totalProducts = await Product.countDocuments({ businessId });
+  const lowStockProducts = await Product.find({
+    businessId: bId,
+    isActive: true,
+    $or: [
+      { $expr: { $lte: ['$quantity', '$minimumStock'] } },
+      { quantity: { $lte: 0 } }
+    ]
+  })
+    .sort({ quantity: 1 })
+    .limit(5)
+    .select('name sku quantity minimumStock unit sellingPrice');
 
-  // Compile daily sales/purchases charts data for the last 7 days
-  const chartDays = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    d.setHours(0, 0, 0, 0);
-    chartDays.push(d);
-  }
+  const totalProducts = await Product.countDocuments({ businessId: bId, isActive: true });
+
+  // 7. Compile daily sales/purchases charts data for the last 7 days using grouped aggregation
+  const numDays = 7;
+  const startDay = new Date();
+  startDay.setDate(startDay.getDate() - (numDays - 1));
+  startDay.setHours(0, 0, 0, 0);
+
+  const [salesByDay, purchasesByDay] = await Promise.all([
+    Sale.aggregate([
+      { 
+        $match: { 
+          businessId: bId, 
+          status: { $ne: 'CANCELLED' }, 
+          createdAt: { $gte: startDay } 
+        } 
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
+          },
+          total: { $sum: '$grandTotal' }
+        }
+      }
+    ]),
+    Purchase.aggregate([
+      { 
+        $match: { 
+          businessId: bId, 
+          status: { $ne: 'CANCELLED' }, 
+          createdAt: { $gte: startDay } 
+        } 
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
+          },
+          total: { $sum: '$grandTotal' }
+        }
+      }
+    ])
+  ]);
+
+  const salesMap = {};
+  salesByDay.forEach(item => {
+    salesMap[item._id] = item.total;
+  });
+
+  const purchasesMap = {};
+  purchasesByDay.forEach(item => {
+    purchasesMap[item._id] = item.total;
+  });
 
   const chartData = [];
-  for (const day of chartDays) {
-    const nextDay = new Date(day);
-    nextDay.setDate(nextDay.getDate() + 1);
-
-    const daySales = await Sale.aggregate([
-      { $match: { businessId, status: 'COMPLETED', createdAt: { $gte: day, $lt: nextDay } } },
-      { $group: { _id: null, total: { $sum: '$grandTotal' } } }
-    ]);
-
-    const dayPurchases = await Purchase.aggregate([
-      { $match: { businessId, status: 'COMPLETED', createdAt: { $gte: day, $lt: nextDay } } },
-      { $group: { _id: null, total: { $sum: '$grandTotal' } } }
-    ]);
+  for (let i = numDays - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateKey = d.toISOString().split('T')[0];
+    const dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
     chartData.push({
-      date: day.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-      sales: Math.round((daySales[0]?.total || 0) * 100) / 100,
-      purchases: Math.round((dayPurchases[0]?.total || 0) * 100) / 100
+      date: dateLabel,
+      dateKey,
+      sales: Math.round((salesMap[dateKey] || 0) * 100) / 100,
+      purchases: Math.round((purchasesMap[dateKey] || 0) * 100) / 100
     });
   }
 
-  // Identify top 5 products sold by volume
+  // 8. Identify top 5 products sold by volume
   const topProducts = await Sale.aggregate([
-    { $match: { businessId, status: 'COMPLETED' } },
+    { $match: { businessId: bId, status: { $ne: 'CANCELLED' } } },
     { $unwind: '$items' },
     { 
       $group: { 
@@ -89,30 +215,51 @@ const getDashboardStats = async (businessId) => {
         revenue: { $sum: '$items.total' } 
       } 
     },
-    { $sort: { quantity: -1 } },
+    { $sort: { quantity: -1, revenue: -1 } },
     { $limit: 5 }
   ]);
 
-  // Load recent 5 timeline activities
-  const recentActivities = await Activity.find({ businessId })
+  // 9. Load recent 8 timeline activities
+  const recentActivities = await Activity.find({ businessId: bId })
+    .sort({ createdAt: -1 })
+    .limit(8)
+    .populate('createdBy', 'name');
+
+  // 10. Load recent 5 completed sales invoices for quick overview
+  const recentSales = await Sale.find({ businessId: bId })
     .sort({ createdAt: -1 })
     .limit(5)
-    .populate('createdBy', 'name');
+    .populate('customerId', 'name mobile')
+    .populate('createdBy', 'name')
+    .select('invoiceNumber grandTotal paidAmount dueAmount paymentMethod status createdAt customerId createdBy');
 
   return {
     metrics: {
       totalSales: Math.round((salesData[0]?.total || 0) * 100) / 100,
       totalPaidSales: Math.round((salesData[0]?.paid || 0) * 100) / 100,
       totalDueSales: Math.round((salesData[0]?.due || 0) * 100) / 100,
+      totalInvoices: salesData[0]?.count || 0,
+      todaySales: Math.round((todaySalesData[0]?.total || 0) * 100) / 100,
+      todayInvoices: todaySalesData[0]?.count || 0,
       totalPurchases: Math.round((purchaseData[0]?.total || 0) * 100) / 100,
+      totalPurchaseOrders: purchaseData[0]?.count || 0,
       customerOutstandings: Math.round((customerData[0]?.due || 0) * 100) / 100,
+      totalCustomers: customerData[0]?.count || 0,
       supplierOutstandings: Math.round((supplierData[0]?.due || 0) * 100) / 100,
+      totalSuppliers: supplierData[0]?.count || 0,
       lowStockCount,
       totalProducts
     },
     chartData,
-    topProducts,
-    recentActivities
+    topProducts: topProducts.map(p => ({
+      _id: p._id,
+      name: p.name,
+      quantity: p.quantity,
+      revenue: Math.round((p.revenue || 0) * 100) / 100
+    })),
+    lowStockProducts,
+    recentActivities,
+    recentSales
   };
 };
 

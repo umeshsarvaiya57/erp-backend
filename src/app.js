@@ -95,6 +95,7 @@ app.use('/api/crm', require('./routes/crmRoutes'));
 app.use('/api/employees', require('./routes/employeeRoutes'));
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 app.use('/api/reports', require('./routes/reportRoutes'));
+app.use('/api/whatsapp', require('./routes/whatsappRoutes'));
 
 // 404 Route
 app.use('*', (req, res, next) => {

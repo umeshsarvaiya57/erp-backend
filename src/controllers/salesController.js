@@ -82,9 +82,24 @@ const cancelSale = async (req, res, next) => {
   }
 };
 
+const getPublicSaleById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const sale = await salesService.getPublicSaleById(id);
+    res.status(200).json({
+      success: true,
+      message: 'Public invoice details retrieved successfully',
+      data: sale
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createSale,
   getSaleById,
+  getPublicSaleById,
   getAllSales,
   cancelSale
 };

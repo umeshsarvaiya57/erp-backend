@@ -4,7 +4,9 @@ const Product = require('../models/Product');
 const Customer = require('../models/Customer');
 const Business = require('../models/Business');
 const InventoryTransaction = require('../models/InventoryTransaction');
+const Activity = require('../models/Activity');
 const AppError = require('../utils/AppError');
+const whatsappGatewayService = require('./whatsappGatewayService');
 
 const createSale = async (businessId, userId, saleData) => {
   const { customerId, items, paidAmount = 0, paymentMethod = 'CASH', notes } = saleData;
@@ -145,6 +147,46 @@ const createSale = async (businessId, userId, saleData) => {
     createdBy: userId
   });
 
+  // 7. Record timeline activity for real-time dashboard tracking
+  try {
+    await Activity.create({
+      businessId,
+      type: 'INVOICE_GENERATED',
+      description: `Generated Invoice #${invoiceNumber} for ${customer.name} - ₹${grandTotal.toFixed(2)}`,
+      referenceId: sale._id,
+      referenceModel: 'Sale',
+      createdBy: userId
+    });
+  } catch (actErr) {
+    console.warn('[Activity Log Error]', actErr.message);
+  }
+
+  // 8. Non-blocking automated WhatsApp message delivery via self-hosted Gateway
+  try {
+    const clientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',')[0] : 'http://localhost:5173';
+    whatsappGatewayService.sendInvoiceNotification(sale, business, customer, clientUrl).catch(err => {
+      console.warn('[WhatsApp Auto-Send Background Error]', err.message);
+    });
+  } catch (waErr) {
+    console.warn('[WhatsApp Auto-Send Init Error]', waErr.message);
+  }
+
+  return sale;
+};
+
+const getPublicSaleById = async (saleId) => {
+  if (!mongoose.Types.ObjectId.isValid(saleId)) {
+    throw new AppError('Invalid Invoice ID.', 400, 'INVALID_ID');
+  }
+
+  const sale = await Sale.findById(saleId)
+    .populate('customerId', 'name mobile email address')
+    .populate('businessId', 'name mobile email address gstNumber logo')
+    .select('-__v');
+
+  if (!sale) {
+    throw new AppError('Sale invoice not found.', 404, 'SALE_NOT_FOUND');
+  }
   return sale;
 };
 
@@ -231,12 +273,27 @@ const cancelSale = async (businessId, userId, saleId) => {
   sale.dueAmount = 0; // no longer owed
   await sale.save();
 
+  // 4. Record timeline activity
+  try {
+    await Activity.create({
+      businessId,
+      type: 'INVOICE_CANCELLED',
+      description: `Cancelled Invoice #${sale.invoiceNumber} and restored product stock`,
+      referenceId: sale._id,
+      referenceModel: 'Sale',
+      createdBy: userId
+    });
+  } catch (actErr) {
+    console.warn('[Activity Log Error]', actErr.message);
+  }
+
   return sale;
 };
 
 module.exports = {
   createSale,
   getSaleById,
+  getPublicSaleById,
   getAllSales,
   cancelSale
 };

@@ -3,6 +3,7 @@ const Product = require('../models/Product');
 const Supplier = require('../models/Supplier');
 const Business = require('../models/Business');
 const InventoryTransaction = require('../models/InventoryTransaction');
+const Activity = require('../models/Activity');
 const AppError = require('../utils/AppError');
 
 const createPurchase = async (businessId, userId, purchaseData) => {
@@ -135,6 +136,20 @@ const createPurchase = async (businessId, userId, purchaseData) => {
     notes,
     createdBy: userId
   });
+
+  // Record timeline activity
+  try {
+    await Activity.create({
+      businessId,
+      type: 'PURCHASE_ORDER',
+      description: `Created Purchase Order #${purchaseNumber} from ${supplier.name} - ₹${grandTotal.toFixed(2)}`,
+      referenceId: purchase._id,
+      referenceModel: 'Purchase',
+      createdBy: userId
+    });
+  } catch (actErr) {
+    console.warn('[Activity Log Error]', actErr.message);
+  }
 
   return purchase;
 };
