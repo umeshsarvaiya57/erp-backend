@@ -17,15 +17,16 @@ const Activity = require('../models/Activity');
 const AuditLog = require('../models/AuditLog');
 
 const runSeed = async () => {
-  const mongoUri = process.env.MONGO_URI;
-  if (!mongoUri) {
-    console.error('Error: MONGO_URI environment variable is missing.');
-    process.exit(1);
-  }
+  const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017/myerp';
 
   console.log('Connecting to database...');
-  await mongoose.connect(mongoUri);
-  console.log('Database connected successfully.');
+  try {
+    await mongoose.connect(mongoUri);
+    console.log('Database connected successfully.');
+  } catch (err) {
+    console.error('Database connection error:', err.message);
+    process.exit(1);
+  }
 
   try {
     // 1. Drop existing data to secure a clean slate
@@ -46,11 +47,13 @@ const runSeed = async () => {
     console.log('Creating Super Admin account...');
     const superAdmin = await User.create({
       name: 'Super Admin Operator',
-      email: 'superadmin@myerp.com',
+      email: 'superadmin@yopmail.com',
       mobile: '9999999999',
-      password: 'Password123!',
+      password: '123456',
       role: 'SUPER_ADMIN',
-      profileCompleted: true
+      status: 'ACTIVE',
+      isFirstLogin: false,
+      permissions: ['*']
     });
     console.log(`Super Admin created: ${superAdmin.email}`);
 
@@ -58,7 +61,7 @@ const runSeed = async () => {
     console.log('Creating sample tenant Business...');
     const business = await Business.create({
       name: 'Alpha Retailers',
-      email: 'contact@alpharetailers.com',
+      email: 'contact@yopmail.com',
       mobile: '9876500001',
       address: '102 Alpha Plaza, MG Road, Ahmedabad, Gujarat',
       state: 'Gujarat',
@@ -74,13 +77,60 @@ const runSeed = async () => {
     const owner = await User.create({
       businessId: business._id,
       name: 'Rajesh Patel',
-      email: 'owner@alpharetailers.com',
+      email: 'owner@yopmail.com',
       mobile: '9876543210',
-      password: 'Password123!',
+      password: '123456',
       role: 'OWNER',
-      profileCompleted: true
+      status: 'ACTIVE',
+      isFirstLogin: false,
+      permissions: ['*']
     });
     console.log(`Business Owner created: ${owner.email}`);
+
+    // 5. Create Business Manager account
+    console.log('Creating Business Manager account...');
+    const manager = await User.create({
+      businessId: business._id,
+      name: 'Vikram Sharma',
+      email: 'manager@yopmail.com',
+      mobile: '9876543211',
+      password: '123456',
+      role: 'MANAGER',
+      status: 'ACTIVE',
+      isFirstLogin: false,
+      permissions: [
+        'products.view', 'products.create', 'products.update', 'products.delete',
+        'sales.view', 'sales.create', 'sales.return',
+        'inventory.view', 'inventory.adjust',
+        'customers.view', 'customers.create', 'customers.update',
+        'suppliers.view', 'suppliers.create', 'suppliers.update',
+        'purchases.view', 'purchases.create',
+        'reports.view',
+        'crm.view', 'crm.create', 'crm.update',
+        'employees.view'
+      ]
+    });
+    console.log(`Business Manager created: ${manager.email}`);
+
+    // 6. Create Business Employee account
+    console.log('Creating Business Employee account...');
+    const employee = await User.create({
+      businessId: business._id,
+      name: 'Ankit Mehta',
+      email: 'employee@yopmail.com',
+      mobile: '9876543212',
+      password: '123456',
+      role: 'EMPLOYEE',
+      status: 'ACTIVE',
+      isFirstLogin: false,
+      permissions: [
+        'products.view',
+        'sales.view', 'sales.create',
+        'customers.view', 'customers.create',
+        'inventory.view'
+      ]
+    });
+    console.log(`Business Employee created: ${employee.email}`);
 
     // 5. Create Categories
     console.log('Seeding Categories...');
@@ -206,16 +256,20 @@ const runSeed = async () => {
       createdBy: owner._id
     });
 
-    console.log('\n======================================================');
-    console.log('   DATABASE SEED COMPLETED SUCCESSFULLY!  ');
-    console.log('======================================================');
-    console.log(`- Super Admin Login: superadmin@myerp.com / Password123!`);
-    console.log(`- Business Owner Login: owner@alpharetailers.com / Password123!`);
+    console.log('\n===================================================================================');
+    console.log('                        DATABASE SEED COMPLETED SUCCESSFULLY!                      ');
+    console.log('===================================================================================');
+    console.log(' USER CREDENTIALS FOR TESTING ALL ROLES:');
+    console.log(` 1. SUPER_ADMIN : superadmin@myerp.com      | Password: Password123!`);
+    console.log(` 2. OWNER       : owner@alpharetailers.com   | Password: Password123!`);
+    console.log(` 3. MANAGER     : manager@alpharetailers.com | Password: Password123!`);
+    console.log(` 4. EMPLOYEE    : employee@alpharetailers.com| Password: Password123!`);
+    console.log('-----------------------------------------------------------------------------------');
     console.log(`- Tenant: ${business.name} (GST State: ${business.state})`);
     console.log(`- Products: ${s23.name} (${s23.sku}), ${lgTv.name} (${lgTv.sku})`);
     console.log(`- Customers: ${localCust.name} (State: ${localCust.state})`);
     console.log(`- Suppliers: ${interSupplier.name} (State: ${interSupplier.state})`);
-    console.log('======================================================\n');
+    console.log('===================================================================================\n');
 
   } catch (error) {
     console.error('Seed process failed with error:', error);

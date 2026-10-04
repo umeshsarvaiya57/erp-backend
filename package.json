@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "seed": "node src/scripts/seed.js"
+    "seed": "node src/scripts/seed.js",
+    "seed:users": "node src/scripts/seedUsers.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^7.0.0-rc14",

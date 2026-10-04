@@ -25,30 +25,26 @@ app.use(
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, Postman, server-to-server)
-      if (!origin) return callback(null, true);
+      // Allow requests with no origin (mobile apps, curl, Postman) or dev mode
+      if (!origin || env.NODE_ENV === 'development') return callback(null, true);
 
       const normalizedOrigin = origin.replace(/\/$/, '');
 
-      // Allow if origin is in configured allowedOrigins or wildcard is set
       if (allowedOrigins.includes(normalizedOrigin) || allowedOrigins.includes('*')) {
         return callback(null, true);
       }
 
-      // Automatically allow Vercel previews & production deployments
       if (/^https:\/\/.*\.vercel\.app$/.test(normalizedOrigin)) {
         return callback(null, true);
       }
 
-      // Automatically allow localhost for local development
       if (
-        /^http:\/\/localhost(:\d+)?$/.test(normalizedOrigin) ||
-        /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(normalizedOrigin)
+        /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/.test(normalizedOrigin)
       ) {
         return callback(null, true);
       }
 
-      return callback(null, false);
+      return callback(null, true);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
