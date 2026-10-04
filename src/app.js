@@ -22,35 +22,36 @@ app.use(
   })
 );
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, curl, Postman) or dev mode
-      if (!origin || env.NODE_ENV === 'development') return callback(null, true);
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, Postman) or any origin
+    if (!origin || env.NODE_ENV === 'development') return callback(null, true);
 
-      const normalizedOrigin = origin.replace(/\/$/, '');
+    const normalizedOrigin = origin.replace(/\/$/, '');
 
-      if (allowedOrigins.includes(normalizedOrigin) || allowedOrigins.includes('*')) {
-        return callback(null, true);
-      }
-
-      if (/^https:\/\/.*\.vercel\.app$/.test(normalizedOrigin)) {
-        return callback(null, true);
-      }
-
-      if (
-        /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/.test(normalizedOrigin)
-      ) {
-        return callback(null, true);
-      }
-
+    if (allowedOrigins.includes(normalizedOrigin) || allowedOrigins.includes('*')) {
       return callback(null, true);
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-  })
-);
+    }
+
+    if (/^https:\/\/.*\.vercel\.app$/.test(normalizedOrigin)) {
+      return callback(null, true);
+    }
+
+    if (
+      /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/.test(normalizedOrigin)
+    ) {
+      return callback(null, true);
+    }
+
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // Rate Limiting
 const limiter = rateLimit({
