@@ -24,31 +24,7 @@ app.use(
 );
 
 const corsOptions = {
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl, Postman)
-    if (!origin) return callback(null, true);
-
-    const normalizedOrigin = origin.replace(/\/$/, '');
-
-    // Allow explicitly defined origins or global wildcard '*'
-    if (allowedOrigins.includes('*') || allowedOrigins.includes(normalizedOrigin)) {
-      return callback(null, true);
-    }
-
-    // Allow all Vercel deployments (*.vercel.app)
-    if (/^https:\/\/.*\.vercel\.app$/.test(normalizedOrigin)) {
-      return callback(null, true);
-    }
-
-    // Allow localhost and local network IP addresses
-    if (
-      /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/.test(normalizedOrigin)
-    ) {
-      return callback(null, true);
-    }
-
-    return callback(null, true);
-  },
+  origin: '*',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
