@@ -10,7 +10,8 @@ const env = require('./config/env');
 const app = express();
 
 // Setup CORS allowed origins
-const allowedOrigins = (env.CLIENT_URL || '')
+const rawClientUrls = env.CLIENT_URL || '';
+const allowedOrigins = rawClientUrls
   .split(',')
   .map((origin) => origin.trim().replace(/\/$/, ''))
   .filter(Boolean);
@@ -24,19 +25,22 @@ app.use(
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl, Postman) or any origin
-    if (!origin || env.NODE_ENV === 'development') return callback(null, true);
+    // Allow requests with no origin (like mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
 
     const normalizedOrigin = origin.replace(/\/$/, '');
 
-    if (allowedOrigins.includes(normalizedOrigin) || allowedOrigins.includes('*')) {
+    // Allow explicitly defined origins or global wildcard '*'
+    if (allowedOrigins.includes('*') || allowedOrigins.includes(normalizedOrigin)) {
       return callback(null, true);
     }
 
+    // Allow all Vercel deployments (*.vercel.app)
     if (/^https:\/\/.*\.vercel\.app$/.test(normalizedOrigin)) {
       return callback(null, true);
     }
 
+    // Allow localhost and local network IP addresses
     if (
       /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/.test(normalizedOrigin)
     ) {
@@ -47,11 +51,11 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  optionsSuccessStatus: 200
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
 
 // Rate Limiting
 const limiter = rateLimit({
