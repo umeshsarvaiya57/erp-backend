@@ -163,7 +163,7 @@ const createSale = async (businessId, userId, saleData) => {
 
   // 8. Non-blocking automated WhatsApp message delivery via self-hosted Gateway
   try {
-    const clientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',')[0] : 'http://localhost:5173';
+    const clientUrl = process.env.CLIENT_URL;
     whatsappGatewayService.sendInvoiceNotification(sale, business, customer, clientUrl).catch(err => {
       console.warn('[WhatsApp Auto-Send Background Error]', err.message);
     });

@@ -209,7 +209,7 @@ class WhatsAppGatewayService {
   /**
    * Formats and automatically delivers an invoice bill notification to the customer.
    */
-  async sendInvoiceNotification(sale, business, customer, clientUrl = 'http://localhost:5173') {
+  async sendInvoiceNotification(sale, business, customer, clientUrl = process.env.clientUrl) {
     if (!this.autoSendEnabled) {
       console.log('[WhatsApp Gateway] Automatic sending is disabled in settings. Skipping.');
       return null;
@@ -257,7 +257,7 @@ class WhatsAppGatewayService {
     }
 
     // Normalized public invoice link
-    const cleanClientUrl = (clientUrl || 'http://localhost:5173').replace(/\/$/, '');
+    const cleanClientUrl = (clientUrl).replace(/\/$/, '');
     const publicInvoiceUrl = `${cleanClientUrl}/public/invoices/${sale._id}`;
 
     const message = 

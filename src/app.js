@@ -9,12 +9,16 @@ const env = require('./config/env');
 
 const app = express();
 
-// Setup CORS allowed origins
-const rawClientUrls = env.CLIENT_URL || '';
-const allowedOrigins = rawClientUrls
-  .split(',')
-  .map((origin) => origin.trim().replace(/\/$/, ''))
-  .filter(Boolean);
+// Enable CORS for all routes (must be top middleware)
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+  })
+);
+app.options('*', cors());
 
 // Security Middlewares
 app.use(
@@ -22,44 +26,6 @@ app.use(
     crossOriginResourcePolicy: { policy: 'cross-origin' }
   })
 );
-
-const corsOptions = {
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl, Postman)
-    if (!origin) return callback(null, true);
-
-    const normalizedOrigin = origin.replace(/\/$/, '');
-
-    // Allow explicitly defined origins, global wildcard '*', Vercel deployments, or localhost
-    if (
-      allowedOrigins.length === 0 ||
-      allowedOrigins.includes('*') ||
-      allowedOrigins.includes(normalizedOrigin) ||
-      /^https:\/\/.*\.vercel\.app$/.test(normalizedOrigin) ||
-      /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/.test(normalizedOrigin)
-    ) {
-      return callback(null, true);
-    }
-
-    return callback(null, true);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-Requested-With',
-    'Accept',
-    'Origin',
-    'Access-Control-Allow-Origin',
-    'Access-Control-Request-Headers',
-    'Access-Control-Request-Method'
-  ],
-  optionsSuccessStatus: 200
-};
-
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
 
 // Rate Limiting
 const limiter = rateLimit({
